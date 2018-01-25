@@ -4,6 +4,7 @@ var exports = {};
 
 exports.dispatch_normal_event = function dispatch_normal_event(event) {
     var noop = function () {};
+
     switch (event.type) {
     case 'alert_words':
         alert_words.words = event.alert_words;
@@ -366,6 +367,13 @@ exports.dispatch_normal_event = function dispatch_normal_event(event) {
         }
         break;
 
+    case 'widget':
+        widgetize.handle_event({
+            sender_id: event.sender_id,
+            message_id: event.message_id,
+            data: event.data,
+        });
+        break;
     }
 };
 

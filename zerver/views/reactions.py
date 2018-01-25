@@ -13,6 +13,11 @@ from zerver.lib.request import JsonableError
 from zerver.lib.response import json_success
 from zerver.models import Message, Reaction, UserMessage, UserProfile
 
+import logging
+import ujson
+from zerver.lib.validator import check_int
+from zerver.tornado.event_queue import send_event
+
 def create_historical_message(user_profile: UserProfile, message: Message) -> None:
     # Users can see and react to messages sent to streams they
     # were not a subscriber to; in order to receive events for
@@ -22,6 +27,32 @@ def create_historical_message(user_profile: UserProfile, message: Message) -> No
     UserMessage.objects.create(user_profile=user_profile,
                                message=message,
                                flags=UserMessage.flags.historical | UserMessage.flags.read)
+
+@has_request_variables
+def process_widget_event(request: HttpRequest,
+                         user_profile: UserProfile,
+                         message_id: int=REQ(validator=check_int),
+                         data: str=REQ(),
+                         ) -> HttpResponse:
+    message, user_message = access_message(user_profile, message_id)
+
+    try:
+        data = ujson.loads(data)
+    except:
+        logging.error('Invalid widget data')
+        return
+
+    event = dict(
+        type="widget",
+        message_id=message_id,
+        sender_id=user_profile.id,
+        data=data,
+    )
+    ums = UserMessage.objects.filter(message=message.id)
+    target_user_ids = [um.user_profile_id for um in ums]
+
+    send_event(event, target_user_ids)
+    return json_success()
 
 @has_request_variables
 def add_reaction(request: HttpRequest, user_profile: UserProfile, message_id: int,
